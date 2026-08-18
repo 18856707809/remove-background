@@ -4,8 +4,8 @@
 remove_bg 可视化页面后端（Flask）
 
 启动：
-    ./.venv/bin/python webapp.py --port 8000
-然后在浏览器打开 http://127.0.0.1:8000
+    ./.venv/bin/python webapp.py --port 4321
+然后在浏览器打开 http://127.0.0.1:4321
 
 接口：
     GET  /                  页面
@@ -635,7 +635,7 @@ def api_dir_mkdir():
 def main(argv=None):
     parser = argparse.ArgumentParser(description="remove_bg 可视化页面")
     parser.add_argument("--host", default="127.0.0.1", help="监听地址（默认仅本机）")
-    parser.add_argument("--port", type=int, default=8000, help="端口（默认 8000）")
+    parser.add_argument("--port", type=int, default=4321, help="端口（默认 4321）")
     args = parser.parse_args(argv)
     print("=" * 56)
     print("  remove_bg 可视化页面已启动")

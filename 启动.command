@@ -16,9 +16,9 @@ if [ ! -d ".venv" ]; then
 fi
 
 echo "正在启动 remove-bg 服务……"
-( sleep 2; open "http://127.0.0.1:8000" ) &
+( sleep 2; open "http://127.0.0.1:4321" ) &
 
-./.venv/bin/python webapp.py --port 8000
+./.venv/bin/python webapp.py --port 4321
 
 echo ""
 echo "服务已停止。"

@@ -22,7 +22,7 @@ Python 3.8+。
 
 ```bash
 pip install remove-background
-remove-bg-web --port 8000      # 启动 Web 界面
+remove-bg-web --port 4321      # 启动 Web 界面
 # 或命令行：remove-bg ./photos -o ./output
 ```
 
@@ -35,7 +35,7 @@ python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-python webapp.py --port 8000     # Web 界面
+python webapp.py --port 4321     # Web 界面
 # 或：python remove_bg.py ./photos -o ./output
 ```
 
@@ -51,7 +51,7 @@ python webapp.py --port 8000     # Web 界面
 
 ## Web 界面使用
 
-浏览器打开 <http://127.0.0.1:8000>：
+浏览器打开 <http://127.0.0.1:4321>：
 
 1. 拖入多张图片（PNG/JPG/WebP/BMP/TIFF，可多选）
 2. 选择模型、输出格式、背景色、留白、正方形等参数
@@ -63,8 +63,8 @@ python webapp.py --port 8000     # Web 界面
 ### 局域网访问
 
 ```bash
-remove-bg-web --host 0.0.0.0 --port 8000
-# 手机/其他电脑访问 http://你的局域网IP:8000
+remove-bg-web --host 0.0.0.0 --port 4321
+# 手机/其他电脑访问 http://你的局域网IP:4321
 ```
 
 ## 命令行使用
