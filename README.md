@@ -39,6 +39,12 @@ python webapp.py --port 8000     # Web 界面
 # 或：python remove_bg.py ./photos -o ./output
 ```
 
+### 日常使用（macOS 最省事）
+
+1. **双击项目里的 `启动.command`** → 自动启动服务并打开浏览器（首次运行会自动装依赖）
+2. 用完点页面右上角 **「⏹ 停止服务」**，或回到终端窗口按 **Ctrl+C**
+3. 下次再用：再双击 `启动.command` 即可
+
 > 首次处理图片时会自动下载所选模型（u2net 约 170MB / isnet 约 170MB / BiRefNet-lite 约 214MB，来自 rembg 官方发布），
 > 缓存于 `~/.u2net/`，之后不再下载。
 > 手动预热：`python -c "import rembg; rembg.new_session('isnet-general-use')"`

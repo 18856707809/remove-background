@@ -468,6 +468,23 @@ def api_cancel(job_id):
     return jsonify({"ok": True})
 
 
+@app.post("/api/shutdown")
+def api_shutdown():
+    """从页面停止服务（本地工具的便捷关闭入口）。"""
+    env = request.environ  # 主线程里取，后台线程中 request 代理不可用
+
+    def _stop():
+        time.sleep(0.3)  # 先让响应发出去
+        shutdown = env.get("werkzeug.server.shutdown")
+        if shutdown:
+            shutdown()
+        else:
+            os._exit(0)  # 非 werkzeug 服务器兜底
+
+    threading.Thread(target=_stop, daemon=True).start()
+    return jsonify({"ok": True, "message": "服务即将停止"})
+
+
 @app.get("/api/thumb/<job_id>/<path:name>")
 def api_thumb(job_id, name):
     job = JOBS.get(job_id)

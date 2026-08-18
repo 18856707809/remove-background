@@ -43,6 +43,10 @@
           display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px;
           box-shadow: 0 3px 8px rgba(37,99,235,.35); }
   .topbar h1 { font-size: 15.5px; font-weight: 650; letter-spacing: .2px; }
+  .stop-btn { margin-left: auto; border: 1px solid var(--line-strong); background: #fff; color: var(--text-2);
+              border-radius: 999px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; transition: all .15s; }
+  .stop-btn:hover { color: var(--err); border-color: #fecaca; background: #fef2f2; }
+  .stop-btn:disabled { opacity: .5; cursor: not-allowed; }
 
   /* ============ 页面容器 ============ */
   .app { max-width: 1800px; margin: 0 auto; padding: 14px 24px 18px;
@@ -329,6 +333,7 @@
   <div class="inner">
     <div class="logo">抠</div>
     <h1>批量去背景</h1>
+    <button class="stop-btn" id="btnStop" title="停止服务（用完点这个，或终端里按 Ctrl+C）">⏹ 停止服务</button>
   </div>
 </div>
 
@@ -772,6 +777,15 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 $("btnZip").addEventListener("click", () => { if (jobId) window.location.href = "/api/zip/" + jobId; });
+
+/* ---------- 停止服务 ---------- */
+$("btnStop").addEventListener("click", async () => {
+  if (!confirm("确定要停止服务吗？停止后这个页面将无法继续使用（随时可重新启动）。")) return;
+  try { await fetch("/api/shutdown", { method: "POST" }); } catch (e) {}
+  showBanner("服务已停止，可以关闭本页面了。");
+  $("btnStop").disabled = true;
+  $("btnStop").textContent = "已停止";
+});
 
 /* ---------- 目录浏览器（保存目标选择） ---------- */
 let curDir = "", dirHome = "";
