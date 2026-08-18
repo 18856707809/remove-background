@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "remove-background"
+version = "1.0.0"
+description = "批量去除图片背景并裁剪到边 —— 命令行 + 可视化 Web 界面"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "remove-background contributors" }]
+keywords = ["remove-background", "matting", "image-processing", "rembg", "flask"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Web Environment",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+  "rembg[cpu]==2.0.61",
+  "Pillow>=10.0.0",
+  "Flask>=3.0",
+]
+
+[project.scripts]
+remove-bg = "remove_bg:main"
+remove-bg-web = "webapp:main"
+
+[tool.setuptools]
+py-modules = ["remove_bg", "webapp"]
+
+[tool.setuptools.data-files]
+"share/remove-background/templates" = ["templates/index.html"]

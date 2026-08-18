@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 运行时数据（Web 任务目录 / 配置）
+web_uploads/
+web_results/
+web_config.json
+.remove_background/
+
+# 测试与演示产物
+benchmark_output/
+output/
+sample_input/
+
+# macOS
+.DS_Store
+
+# 编辑器
+.idea/
+.vscode/
+*.swp

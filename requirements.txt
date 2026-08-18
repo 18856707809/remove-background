@@ -1,0 +1,8 @@
+# 批处理抠图所需的 Python 依赖
+# 安装：pip install -r requirements.txt
+# （macOS/Linux 如遇权限问题可加 --user，或先创建虚拟环境）
+
+# 注意：rembg 2.0.61 起 onnxruntime 是可选依赖，必须用 [cpu] 附加组
+rembg[cpu]==2.0.61       # 抠图引擎（含 isnet / BiRefNet 等高质量模型）
+Pillow>=10.0.0           # 图像裁切、保存
+Flask>=3.0               # 可视化页面后端
