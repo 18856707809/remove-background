@@ -90,16 +90,85 @@ def test_low_threshold_contents():
     rb.ALPHA_THRESHOLD = 8
     print("✓ 阈值影响包围盒判定")
 
+def test_has_cutout_alpha():
+    """已抠好的透明图应能被识别出来，普通照片不会误判。"""
+    img, _ = make_img()
+    assert rb.has_cutout_alpha(img), "透明底图应判定为已抠图"
+    opaque = Image.new("RGBA", (100, 100), (255, 0, 0, 255))
+    assert not rb.has_cutout_alpha(opaque), "不透明照片不应判定为已抠图"
+    # 只有一个透明像素：不算已抠图（避免把普通图片误判）
+    almost = Image.new("RGBA", (200, 200), (255, 0, 0, 255))
+    almost.putpixel((0, 0), (0, 0, 0, 0))
+    assert not rb.has_cutout_alpha(almost), "零星透明像素不应判定为已抠图"
+    # 全透明图：没有内容，跳过 AI 更合理
+    empty = Image.new("RGBA", (50, 50), (0, 0, 0, 0))
+    assert rb.has_cutout_alpha(empty)
+    print("✓ has_cutout_alpha 已抠图识别正常")
+
+def _crop_args(**kw):
+    """构造 process_one 需要的参数对象（默认值同 Web 端）。"""
+    from types import SimpleNamespace
+    defaults = dict(
+        mode="smart", model="u2net", format="png", padding_px=0, padding_ratio=0.0,
+        square=False, keep_size=False, min_side=0, alpha_matting=False,
+        no_post_process=False, erode=0, background=None, quality=95,
+        workers=1, overwrite=True, suffix=False,
+    )
+    defaults.update(kw)
+    return SimpleNamespace(**defaults)
+
+def test_process_one_crop_only(tmp):
+    """仅裁剪模式：rembg 传 None 也必须成功，证明没有跑 AI。"""
+    src = tmp / "cutout.png"
+    img, _ = make_img(size=(200, 150), box=(40, 30, 120, 100))
+    img.save(src)
+    out_dir = tmp / "out_crop"
+    status, detail = rb.process_one(src, out_dir, None, _crop_args(mode="crop"), None)
+    assert status == "ok", detail
+    out = Image.open(detail)
+    assert out.size == (81, 71), f"裁剪尺寸错误: {out.size}"
+    print("✓ --mode crop 跳过 AI 并裁剪到边:", out.size)
+
+def test_process_one_smart_cutout(tmp):
+    """智能模式：带透明底的图自动跳过 AI，同样不需要 rembg。"""
+    src = tmp / "smart.png"
+    img, _ = make_img(size=(200, 150), box=(40, 30, 120, 100))
+    img.save(src)
+    out_dir = tmp / "out_smart"
+    status, detail = rb.process_one(src, out_dir, None, _crop_args(mode="smart"), None)
+    assert status == "ok", detail
+    out = Image.open(detail)
+    assert out.size == (81, 71), f"裁剪尺寸错误: {out.size}"
+    print("✓ 智能模式自动跳过 AI 并裁剪到边:", out.size)
+
+def test_padding_for_cutout(tmp):
+    """已抠图模式同样支持留白/正方形等裁剪参数。"""
+    src = tmp / "pad.png"
+    img, _ = make_img(size=(200, 150), box=(40, 30, 120, 100))
+    img.save(src)
+    out_dir = tmp / "out_pad"
+    args = _crop_args(mode="crop", padding_px=10, square=True)
+    status, detail = rb.process_one(src, out_dir, None, args, None)
+    assert status == "ok", detail
+    out = Image.open(detail)
+    assert out.size == (101, 101), f"留白+正方形尺寸错误: {out.size}"
+    print("✓ 已抠图模式支持留白/正方形:", out.size)
+
 if __name__ == "__main__":
     import tempfile
     with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
         test_bbox()
         test_crop()
         test_crop_padding()
         test_keep_size_and_square()
         test_min_side()
         test_fully_transparent()
-        test_export(Path(td))
+        test_export(tmp)
         test_main_padding_parse()
         test_low_threshold_contents()
+        test_has_cutout_alpha()
+        test_process_one_crop_only(tmp)
+        test_process_one_smart_cutout(tmp)
+        test_padding_for_cutout(tmp)
     print("\n全部测试通过 ✅")

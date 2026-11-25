@@ -107,6 +107,12 @@
                 padding: 7px 11px; display: flex; flex-direction: column; gap: 3px; }
   .model-info .mi-row { display: grid; grid-template-columns: 56px 1fr; gap: 6px; font-size: 12px; line-height: 1.7; }
   .model-info .mi-k { color: var(--text-3); font-weight: 500; }
+  .new-tag { display: inline-block; margin-left: 3px; padding: 0 5px; border-radius: 999px; background: #e8efff;
+             color: var(--brand); font-size: 10px; font-weight: 600; line-height: 16px; vertical-align: 1px; }
+  .mode-hint { font-size: 11.5px; line-height: 1.6; color: var(--text-3); background: #f8fafc;
+               border: 1px dashed var(--line-strong); border-radius: 8px; padding: 6px 10px; }
+  .mode-hint b { color: var(--brand); font-weight: 600; }
+  .chk.disabled { opacity: .45; cursor: not-allowed; }
 
   /* —— 操作列 —— */
   .actions-col { display: flex; flex-direction: column; gap: 9px; justify-content: center; }
@@ -265,7 +271,7 @@
         且不能用 !important，否则会覆盖下面两个整行规则） */
     .p-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
     .p-grid .opt { grid-column: auto; }
-    .p-grid .model-field, .p-grid .format-field { grid-column: 1 / -1; }
+    .p-grid .model-field, .p-grid .format-field, .p-grid .mode-field { grid-column: 1 / -1; }
     select, input[type=number], input[type=text] {
       font-size: 16px;            /* 防止 iOS 聚焦自动放大 */
       min-height: var(--touch);
@@ -355,6 +361,14 @@
     <!-- ② 参数 -->
     <div class="card ctrl-col params-col">
       <div class="p-grid">
+        <div class="opt span4 mode-field">
+          <label for="optMode">处理模式 <span class="new-tag">新</span></label>
+          <select id="optMode">
+            <option value="smart" selected>智能：已抠好的图只裁剪</option>
+            <option value="remove">全部重新 AI 抠图</option>
+            <option value="crop">自动裁剪到边（跳过 AI）</option>
+          </select>
+        </div>
         <div class="opt span4 model-field">
           <label for="optModel">抠图模型</label>
           <select id="optModel">
@@ -394,6 +408,8 @@
         <div class="opt span2"><label for="optMinSide">最小边 (px)</label><input type="number" id="optMinSide" value="0" min="0" title="0=不缩放"></div>
         <div class="opt span2"><label for="optWorkers">并行线程</label><input type="number" id="optWorkers" value="1" min="1" max="16" title="同时处理几张图"></div>
       </div>
+
+      <div class="mode-hint" id="modeHint"></div>
 
       <details class="model-details">
         <summary>模型说明</summary>
@@ -543,7 +559,9 @@ function showBanner(msg, green = false) {
 /* ---------- 参数 ---------- */
 function collectOptions() {
   const bgText = $("optBgText").value.trim();
+  const mode = $("optMode").value;
   return {
+    mode: mode,
     model: $("optModel").value,
     format: $("optFormat").value,
     background: bgText || null,
@@ -552,12 +570,28 @@ function collectOptions() {
     square: $("optSquare").checked,
     keep_size: $("optKeepSize").checked,
     min_side: parseInt($("optMinSide").value) || 0,
-    erode: parseInt($("optErode").value) || 0,
-    alpha_matting: $("optMatting").checked,
+    erode: mode === "crop" ? 0 : (parseInt($("optErode").value) || 0),
+    alpha_matting: mode !== "crop" && $("optMatting").checked,
     quality: Math.min(100, Math.max(1, parseInt($("optQuality").value) || 95)),
     workers: Math.min(16, Math.max(1, parseInt($("optWorkers").value) || 1)),
   };
 }
+
+/* ---------- 处理模式 ---------- */
+const MODE_HINTS = {
+  smart: "<b>智能模式：</b>已带透明背景的图（例如手动抠好的 PNG）会自动跳过 AI 重新抠图，只按透明边缘裁剪到边；普通照片照常抠图。混合批次不用分开处理。",
+  remove: "<b>全部重新抠图：</b>所有图片都会再跑一次 AI。手动抠好的透明图可能被再次识别而残缺，仅在确实需要重抠时使用。",
+  crop: "<b>自动裁剪到边：</b>完全不做 AI 抠图，直接按透明边缘裁剪到边。请上传已抠好、带透明背景的 PNG/WebP；普通照片请改用「智能」或「全部重新抠图」。",
+};
+function syncMode() {
+  const crop = $("optMode").value === "crop";
+  $("optModel").disabled = crop;
+  $("optErode").disabled = crop;
+  $("optMatting").disabled = crop;
+  $("optMatting").closest(".chk").classList.toggle("disabled", crop);
+  $("modeHint").innerHTML = MODE_HINTS[$("optMode").value] || "";
+}
+$("optMode").addEventListener("change", syncMode);
 const MODEL_INFO = {{ model_info | tojson }};
 function renderModelInfo() {
   const info = MODEL_INFO[$("optModel").value];
@@ -887,6 +921,7 @@ $("btnSave").addEventListener("click", async () => {
 
 renderFileList();
 renderModelInfo();
+syncMode();
 </script>
 </body>
 </html>

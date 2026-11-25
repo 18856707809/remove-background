@@ -8,6 +8,7 @@ remove_bg.py —— 批量去除图片背景，并自动裁剪到主体边缘
 * 批量处理：可一次传入多个文件或文件夹（文件夹递归扫描子目录）
 * 抠图引擎：rembg（u2net 等 onnx 模型，首次运行会自动下载模型）
 * 裁剪到边：按透明通道包围盒自动裁掉多余空白，可加边距留白
+* 已抠图模式：手动抠好的透明图自动跳过 AI（或 --mode crop 强制跳过），只裁剪到边
 * 可选：正方形画布、最小边尺寸放大、纯色背景填充（白底/任意色）、JPG/WebP 导出
 * 多线程处理、断点续跑（默认跳过已生成的文件）、单个文件出错不中断
 
@@ -18,6 +19,7 @@ python3 remove_bg.py a.png b.jpg -o out/                          # 处理多个
 python3 remove_bg.py in/ -o out/ -p 10 --square                   # 加 10px 边距并输出正方形
 python3 remove_bg.py in/ -o out/ -b white -f jpg -q 95            # 白底输出 JPG
 python3 remove_bg.py in/ -o out/ -m isnet-general-use --workers 4 # 换模型 + 4 线程
+python3 remove_bg.py cutouts/ -o out/ --mode crop                 # 已抠好的透明图：跳过 AI，只裁剪到边
 
 依赖安装
 --------
@@ -106,6 +108,12 @@ SUPPORTED_OUT_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
 # 内容判定阈值：alpha 值高于此值视为"内容"，低于则视为背景。可用环境变量调整。
 ALPHA_THRESHOLD = int(os.environ.get("RMBG_ALPHA_THRESHOLD", "8"))
 
+# 「已抠好的透明图」判定：alpha 小于该值视为透明/半透明边缘
+CUTOUT_ALPHA_MAX = 240
+# 透明像素占比下限（低于此值可能只是照片边缘的抗锯齿，仍交给 AI 处理）
+CUTOUT_MIN_TRANSPARENT_RATIO = 0.0005
+CUTOUT_MIN_TRANSPARENT_PX = 32
+
 
 def alpha_bbox(img):
     """返回内容区域的包围盒 (left, top, right, bottom)。
@@ -117,6 +125,29 @@ def alpha_bbox(img):
         img = img.convert("RGBA")
     binary = img.getchannel("A").point(lambda v: 255 if v > ALPHA_THRESHOLD else 0)
     return binary.getbbox()
+
+
+def has_cutout_alpha(img):
+    """判断图片是否已经是「手动抠好的透明图」。
+
+    只看 alpha 通道：既存在透明/半透明像素、又存在可见内容时，
+    说明背景已经被抠掉，可以直接跳过 AI 抠图（否则 rembg 会把透明背景
+    当成待抠内容，把主体重新识别成残缺的一小块）。
+
+    透明像素太少（低于 0.05%）时视为普通照片，仍交给 AI，避免误判。
+    """
+    if img.mode != "RGBA" or img.width <= 0 or img.height <= 0:
+        return False
+    alpha = img.getchannel("A")
+    lo, hi = alpha.getextrema()
+    if lo > CUTOUT_ALPHA_MAX:
+        return False  # 全不透明：普通照片
+    if hi <= ALPHA_THRESHOLD:
+        return True   # 全透明：没有可抠的内容，原样交给裁剪逻辑
+    transparent = sum(alpha.histogram()[:CUTOUT_ALPHA_MAX + 1])
+    min_px = max(CUTOUT_MIN_TRANSPARENT_PX,
+                 int(img.width * img.height * CUTOUT_MIN_TRANSPARENT_RATIO))
+    return transparent >= min_px
 
 
 def erode_alpha(img, px=1):
@@ -234,21 +265,29 @@ def process_one(src, out_dir, out_file, args, rembg):
 
         _ensure_pil()
 
-        # 修正手机照片的 EXIF 方向，然后统一转 RGBA 供 rembg 使用
+        # 修正手机照片的 EXIF 方向，然后统一转 RGBA
+        # （调色板 PNG/P 模式可能带透明色，直接转 RGBA 才能保住 alpha，不能先转 RGB）
         img = Image.open(src)
         img = ImageOps.exif_transpose(img)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
         if img.mode != "RGBA":
             img = img.convert("RGBA")
 
-        session = get_session(rembg, args.model)
-        result = rembg.remove(
-            img,
-            session=session,
-            alpha_matting=args.alpha_matting,
-            post_process_mask=not args.no_post_process,
-        )
+        mode = getattr(args, "mode", "smart")
+        skip_rembg = (mode == "crop") or (mode == "smart" and has_cutout_alpha(img))
+
+        if skip_rembg:
+            # 已抠好的透明图 / 仅裁剪模式：绝不能再跑一次 AI，否则主体会被重新识别、裁残
+            result = img
+        else:
+            if rembg is None:
+                raise RuntimeError("当前处理模式需要 AI 抠图，但未加载 rembg")
+            session = get_session(rembg, args.model)
+            result = rembg.remove(
+                img,
+                session=session,
+                alpha_matting=args.alpha_matting,
+                post_process_mask=not args.no_post_process,
+            )
 
         if getattr(args, "erode", 0):
             result = erode_alpha(result, int(args.erode))
@@ -321,6 +360,9 @@ def build_parser():
     p.add_argument("-q", "--quality", type=int, default=95, help="JPEG/WebP 压缩质量 1-100")
     p.add_argument("--square", action="store_true", help="输出为正方形透明画布（内容居中）")
     p.add_argument("--keep-size", action="store_true", help="只去背景不裁剪（保留原始画布尺寸）")
+    p.add_argument("--mode", choices=["smart", "remove", "crop"], default="smart",
+                   help="处理模式：smart=已抠好的透明图自动跳过 AI、只裁剪到边（默认）；"
+                        "remove=全部重新 AI 抠图；crop=全部只裁剪到边（跳过 AI）")
     p.add_argument("--min-side", type=int, default=0,
                    help="若裁剪后最大边小于该像素值则放大到该尺寸")
     p.add_argument("--alpha-matting", action="store_true",
@@ -364,8 +406,8 @@ def main(argv=None):
     # Pillow 检查
     _ensure_pil()
 
-    # rembg 检查
-    rembg = load_rembg()
+    # rembg 检查（仅裁剪模式不需要 AI 模型，缺 rembg 也能用）
+    rembg = None if args.mode == "crop" else load_rembg()
 
     # 解析边距参数：显式参数优先于 --padding
     if args.padding_px is None and args.padding_ratio is None:
@@ -390,15 +432,23 @@ def main(argv=None):
         if out_file:
             sys.exit("[错误] --in-place 与单文件输出 -o 冲突，请去掉 -o 的文件路径形式")
 
+    mode_desc = {
+        "smart": "智能（已抠好的透明图自动只裁剪，其余 AI 抠图）",
+        "remove": "全部重新 AI 抠图",
+        "crop": "仅裁剪到边（跳过 AI 抠图）",
+    }.get(args.mode, args.mode)
     print(f"待处理：{len(files)} 张图片")
-    print(f"模型：{args.model} | 线程数：{args.workers}")
+    print(f"模式：{mode_desc}")
+    if args.mode != "crop":
+        print(f"模型：{args.model}")
+    print(f"线程数：{args.workers}")
     if args.in_place:
         print("输出：每个原图所在目录（--in-place）")
     else:
         print(f"输出：{out_file if out_file else out_dir / ''}")
 
-    # 多线程时先在主线程创建一次会话（首次运行会下载模型，避免多线程同时下载）
-    if args.workers > 1:
+    # 「全部重新抠图」模式下多线程时先在主线程创建会话（首次运行会下载模型，避免多线程同时下载）
+    if args.mode == "remove" and args.workers > 1:
         print("正在准备模型（首次运行需要下载，约 170MB）……")
         get_session(rembg, args.model)
 

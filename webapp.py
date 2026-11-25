@@ -206,7 +206,12 @@ def build_opts(o):
     if out_fmt and out_fmt.lower() == "jpeg":
         out_fmt = "jpg"
 
+    mode = (o.get("mode") or "smart").strip().lower()
+    if mode not in ("smart", "remove", "crop"):
+        mode = "smart"
+
     return SimpleNamespace(
+        mode=mode,
         model=str(o.get("model") or "u2net"),
         format=out_fmt,
         padding_px=int(o.get("padding_px") or 0),
@@ -257,12 +262,14 @@ def run_job(job_id):
         return
     opts = job["opts"]
 
-    # rembg 检查（不存在时给出中文提示）
-    try:
-        rembg = rb.load_rembg()
-    except SystemExit as exc:
-        _update(job, status="error", message=str(exc), finished=time.time())
-        return
+    # rembg 检查（仅裁剪模式完全用不到 AI 模型，缺 rembg 也能跑）
+    rembg = None
+    if opts.mode != "crop":
+        try:
+            rembg = rb.load_rembg()
+        except SystemExit as exc:
+            _update(job, status="error", message=str(exc), finished=time.time())
+            return
 
     _update(job, status="running", started=time.time())
 
@@ -270,8 +277,8 @@ def run_job(job_id):
     total = len(files)
     _update(job, total=total)
 
-    # 多线程时先在主线程预热会话（模型已缓存则立即返回）
-    if opts.workers > 1:
+    # 「全部重新抠图」模式多线程时先在主线程预热会话（模型已缓存则立即返回）
+    if opts.mode == "remove" and opts.workers > 1:
         try:
             rb.get_session(rembg, opts.model)
         except Exception as exc:
