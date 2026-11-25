@@ -5,20 +5,27 @@
 
 cd "$(dirname "$0")"
 
+# 虚拟环境放在 iCloud 之外，避免 Desktop 同步把依赖文件卸载成 dataless 占位文件
+VENV="$HOME/.venvs/remove_bg"
+# 兼容旧环境：如果项目内的 .venv 可用，也接受
+if [ ! -x "$VENV/bin/python" ] && [ -x ".venv/bin/python" ] && ./.venv/bin/python -c "import flask, rembg" >/dev/null 2>&1; then
+  VENV="$PWD/.venv"
+fi
+
 # 首次运行：建虚拟环境 + 装依赖
-if [ ! -d ".venv" ]; then
+if [ ! -x "$VENV/bin/python" ]; then
   echo "==============================================="
   echo "  首次运行，正在创建环境并安装依赖（约 2-5 分钟）"
   echo "==============================================="
-  python3 -m venv .venv || { echo "创建虚拟环境失败，请确认已安装 Python 3.8+"; read -r; exit 1; }
-  ./.venv/bin/pip install -r requirements.txt || { echo "依赖安装失败，请检查网络后重试"; read -r; exit 1; }
+  python3 -m venv "$VENV" || { echo "创建虚拟环境失败，请确认已安装 Python 3.8+"; read -r; exit 1; }
+  "$VENV/bin/python" -m pip install -r requirements.txt || { echo "依赖安装失败，请检查网络后重试"; read -r; exit 1; }
   echo "环境就绪！"
 fi
 
 echo "正在启动 remove-bg 服务……"
 ( sleep 2; open "http://127.0.0.1:4321" ) &
 
-./.venv/bin/python webapp.py --port 4321
+"$VENV/bin/python" webapp.py --port 4321
 
 echo ""
 echo "服务已停止。"
